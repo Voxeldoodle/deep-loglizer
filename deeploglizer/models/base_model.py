@@ -6,7 +6,10 @@ import numpy as np
 import pandas as pd
 from torch import nn
 from collections import defaultdict
-from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score
+from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_score, classification_report
+
+from collections import Counter
+
 
 from deeploglizer.common.utils import set_device, tensor2flatten_arr
 
@@ -93,9 +96,17 @@ class ForcastBasedModel(nn.Module):
         self.eval()  # set to evaluation mode
         with torch.no_grad():
             y_pred = []
+
+            ##############
+            real_classes = []
+            #############
+
             store_dict = defaultdict(list)
             infer_start = time.time()
             for batch_input in test_loader:
+                #########Begin########
+                real_classes.extend(batch_input['window_an_classes'])
+                ##########End#########
                 return_dict = self.forward(self.__input2device(batch_input))
                 y_pred = return_dict["y_pred"]
                 store_dict["session_idx"].extend(
@@ -125,6 +136,10 @@ class ForcastBasedModel(nn.Module):
             )
             pred = (session_df[f"window_preds"] > thre).astype(int)
             y = (session_df["window_anomalies"] > 0).astype(int)
+            ####################Begin######################
+            preds = (store_df["window_preds"] > thre).astype(int)
+            class_results = self.evaluate_anomalies(real_classes,preds)
+            ####################End######################
 
             eval_results = {
                 "f1": f1_score(y, pred),
@@ -133,6 +148,9 @@ class ForcastBasedModel(nn.Module):
                 "acc": accuracy_score(y, pred),
             }
             logging.info({k: f"{v:.3f}" for k, v in eval_results.items()})
+            ##############Begin###################
+            logging.info({k: f"{v:.3f}" for k, v in class_results['macro avg'].items()})
+            ################End#################
             return eval_results
 
     def __evaluate_anomaly(self, test_loader, dtype="test"):
@@ -142,7 +160,20 @@ class ForcastBasedModel(nn.Module):
             y_pred = []
             store_dict = defaultdict(list)
             infer_start = time.time()
+
+            ##############
+            real_classes = []
+            #############
+
             for batch_input in test_loader:
+
+                #########Begin########
+                real_classes.extend(batch_input['window_an_classes'])
+                # print(batch_input)
+                # torch.save(batch_input, 'anomaly_tensor.pt')
+                # exit()
+                ##########End#########
+
                 return_dict = self.forward(self.__input2device(batch_input))
                 y_prob, y_pred = return_dict["y_pred"].max(dim=1)
                 store_dict["session_idx"].extend(
@@ -161,7 +192,9 @@ class ForcastBasedModel(nn.Module):
             session_df = store_df[use_cols].groupby("session_idx", as_index=False).sum()
             pred = (session_df[f"window_preds"] > 0).astype(int)
             y = (session_df["window_anomalies"] > 0).astype(int)
-
+            ####################Begin######################
+            class_results = self.evaluate_anomalies(real_classes,store_df['window_preds'])
+            ####################End######################
             eval_results = {
                 "f1": f1_score(y, pred),
                 "rc": recall_score(y, pred),
@@ -169,6 +202,9 @@ class ForcastBasedModel(nn.Module):
                 "acc": accuracy_score(y, pred),
             }
             logging.info({k: f"{v:.3f}" for k, v in eval_results.items()})
+            ##############Begin###################
+            logging.info({k: f"{v:.3f}" for k, v in class_results['macro avg'].items()})
+            ################End#################
             return eval_results
 
     def __evaluate_next_log(self, test_loader, dtype="test"):
@@ -238,10 +274,20 @@ class ForcastBasedModel(nn.Module):
                 session_df = store_df
             # session_df.to_csv("session_{}_2.csv".format(dtype), index=False)
 
+
+            ################Begin#################
+            y_true = store_df['window_labels'].to_list()
+            ################End#################
             for topk in range(1, self.topk + 1):
                 pred = (session_df[f"window_pred_anomaly_{topk}"] > 0).astype(int)
                 y = (session_df["window_anomalies"] > 0).astype(int)
                 window_topk_acc = 1 - store_df["window_anomalies"].sum() / len(store_df)
+
+                ###############Begin###################
+                y_pred = list(np.where(store_df[f'window_pred_anomaly_{topk}']==0,store_df['window_labels'],0))
+                class_results = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
+                ################End##################
+
                 eval_results = {
                     "f1": f1_score(y, pred),
                     "rc": recall_score(y, pred),
@@ -249,12 +295,44 @@ class ForcastBasedModel(nn.Module):
                     "top{}-acc".format(topk): window_topk_acc,
                 }
                 logging.info({k: f"{v:.3f}" for k, v in eval_results.items()})
+
+                ##############Begin###################
+                logging.info({k: f"{v:.3f}" for k, v in class_results['macro avg'].items()})
+                ################End#################
+
                 if eval_results["f1"] >= best_f1:
                     best_result = eval_results
                     best_f1 = eval_results["f1"]
             count_end = time.time()
             logging.info("Finish counting [{:.2f}s]".format(count_end - count_start))
             return best_result
+
+    ####################Begin######################
+    def evaluate_anomalies(self, real_classes, preds, printStats=True):
+        y_pred = [t.tolist()
+        if p else [0]*len(t)
+        for p, t in zip(preds, real_classes)]
+
+        y_pred = [item for sublist in y_pred for item in sublist]
+        y_true = [item.item() for sublist in real_classes for item in sublist]
+        if printStats:
+            print(f"Anomalous windows {sum(x > 0 for x in preds)}/{len(preds)}", end="\t")
+            print(f"Class Anomalies (predicted/real//total): {sum(x > 0 for x in y_pred)}/{sum(x > 0 for x in y_true)}/{len(y_pred)}")
+            pred_classes = dict(Counter(y_pred))
+            true_classes = dict(Counter(y_true))
+            keys = set(pred_classes.keys())
+            keys.update(set(true_classes.keys()))
+            print("Classes (id:pred/real):", end=" ")
+            for k in keys:
+                if k in pred_classes and k in true_classes:
+                    print(f"{k}:{pred_classes[k]}/{true_classes[k]}", end=" ")
+                elif k in pred_classes and k not in true_classes:
+                    print(f"{k}:{pred_classes[k]}/0", end=" ")
+                else:
+                    print(f"{k}:0/{true_classes[k]}", end=" ")
+            print("")
+        return classification_report(y_true, y_pred, output_dict=True, zero_division=0)
+    ####################End######################
 
     def __input2device(self, batch_input):
         return {k: v.to(self.device) for k, v in batch_input.items()}

@@ -175,6 +175,10 @@ class FeatureExtractor(BaseEstimator):
                 windows = []
                 window_labels = []
                 window_anomalies = []
+
+                ###############Begin#################
+                window_an_classes = []
+                ################End##################
                 while i + self.window_size < template_len:
                     window = templates[i: i + self.window_size]
                     next_log = self.log2id_train.get(templates[i + self.window_size], 1)
@@ -183,12 +187,25 @@ class FeatureExtractor(BaseEstimator):
                         window_anomaly = int(
                             1 in data_dict["label"][i: i + self.window_size + 1]
                         )
+                        ##############Begin################
+                        classes = [self.log2id_train.get(templates[j], 1)
+                        if data_dict["label"][j] > 0 else 0
+                        for j in range(i, i + self.window_size )
+                        ]
+                        ################End##############
                     else:
                         window_anomaly = data_dict["label"]
+                        ###############Begin###############
+                        classes = [self.log2id_train.get(templates[i], 1)*data_dict["label"]
+                        for i in range(i, i + self.window_size )]
+                        ################End##############
 
                     windows.append(window)
                     window_labels.append(next_log)
                     window_anomalies.append(window_anomaly)
+                    ######################Begin########################
+                    window_an_classes.append(np.array(classes))
+                    #######################End#######################
                     i += stride
                 else:
                     window = templates[i:-1]
@@ -197,17 +214,37 @@ class FeatureExtractor(BaseEstimator):
 
                     if isinstance(data_dict["label"], list):
                         window_anomaly = int(1 in data_dict["label"][i:])
+                        ################Begin##############
+                        classes = [self.log2id_train.get(templates[j], 1)
+                        if data_dict["label"][j] > 0 else 0
+                        for j in range(len(templates[i:]))
+                        ]
+                        classes.extend([1] * (self.window_size - len(classes)))
+                        ###############End###############
                     else:
                         window_anomaly = data_dict["label"]
+                        ################Begin##############
+                        classes = [self.log2id_train.get(templates[i], 1)*data_dict["label"]
+                        for i in range(len(templates[i:]))]
+                        classes.extend([1] * (self.window_size - len(classes)))
+                        ##############End################
 
                     windows.append(window)
                     window_labels.append(next_log)
                     window_anomalies.append(window_anomaly)
+                    ####################Begin##########################
+                    window_an_classes.append(np.array(classes))
+                    ####################End##########################
                 window_count += len(windows)
 
                 session_dict[session_id]["windows"] = windows
                 session_dict[session_id]["window_labels"] = window_labels
                 session_dict[session_id]["window_anomalies"] = window_anomalies
+
+                ###########################Begin###############################
+                session_dict[session_id]["window_an_classes"] = window_an_classes
+                ##########################End##################################
+
 
                 if session_id == "all":
                     logging.info(
@@ -282,7 +319,7 @@ class FeatureExtractor(BaseEstimator):
         )
         self.log2id_train = {v: k for k, v in self.id2log_train.items()}
 
-        logging.info("{} tempaltes are found.".format(len(self.log2id_train)))
+        logging.info("{} templates are found.".format(len(self.log2id_train)))
 
         if self.label_type == "next_log":
             self.meta_data["num_labels"] = len(self.log2id_train)

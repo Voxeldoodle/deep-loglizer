@@ -58,12 +58,18 @@ class log_dataset(Dataset):
             features = data_dict["features"][feature_type]
             window_labels = data_dict["window_labels"]
             window_anomalies = data_dict["window_anomalies"]
+            #####################Begin#############################
+            window_an_classes = data_dict["window_an_classes"]
+            #######################End###########################
             for window_idx in range(len(window_labels)):
                 sample = {
                     "session_idx": session_idx,  # not session id
                     "features": features[window_idx],
                     "window_labels": window_labels[window_idx],
                     "window_anomalies": window_anomalies[window_idx],
+                    ######################Begin#######################
+                    "window_an_classes": window_an_classes[window_idx],
+                    ########################End#########################
                 }
                 flatten_data_list.append(sample)
         self.flatten_data_list = flatten_data_list
