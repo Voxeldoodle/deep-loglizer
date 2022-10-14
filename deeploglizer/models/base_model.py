@@ -213,7 +213,16 @@ class ForcastBasedModel(nn.Module):
             y_pred = []
             store_dict = defaultdict(list)
             infer_start = time.time()
+
+            ##############
+            real_classes = []
+            #############
             for batch_input in test_loader:
+
+                #########Begin########
+                real_classes.extend(batch_input['window_an_classes'])
+                ##########End#########
+
                 return_dict = model.forward(self.__input2device(batch_input))
                 y_pred = return_dict["y_pred"]
                 y_prob_topk, y_pred_topk = torch.topk(y_pred, self.topk)  # b x topk
@@ -274,19 +283,22 @@ class ForcastBasedModel(nn.Module):
                 session_df = store_df
             # session_df.to_csv("session_{}_2.csv".format(dtype), index=False)
 
-
             ################Begin#################
-            y_true = store_df['window_labels'].to_list()
-            ################End#################
+            # y_true = store_df['window_labels'].to_list()
+            ################End###################
             for topk in range(1, self.topk + 1):
                 pred = (session_df[f"window_pred_anomaly_{topk}"] > 0).astype(int)
                 y = (session_df["window_anomalies"] > 0).astype(int)
                 window_topk_acc = 1 - store_df["window_anomalies"].sum() / len(store_df)
 
                 ###############Begin###################
-                y_pred = list(np.where(store_df[f'window_pred_anomaly_{topk}']==0,store_df['window_labels'],0))
-                class_results = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
-                ################End##################
+                # y_pred = list(np.where(store_df[f'window_pred_anomaly_{topk}']==0,store_df['window_labels'],0))
+                # class_results = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
+                ################End####################
+                ###############Begin###################
+                preds = (store_df[f"window_pred_anomaly_{topk}"] > 0).astype(int)
+                class_results = self.evaluate_anomalies(real_classes,preds, False)
+                ################End####################
 
                 eval_results = {
                     "f1": f1_score(y, pred),
@@ -308,7 +320,7 @@ class ForcastBasedModel(nn.Module):
             return best_result
 
     ####################Begin######################
-    def evaluate_anomalies(self, real_classes, preds, printStats=True):
+    def evaluate_anomalies(self, real_classes, preds, printClasses=True, printStats=True):
         y_pred = [t.tolist()
         if p else [0]*len(t)
         for p, t in zip(preds, real_classes)]
@@ -317,6 +329,7 @@ class ForcastBasedModel(nn.Module):
         y_true = [item.item() for sublist in real_classes for item in sublist]
         if printStats:
             print(f"Anomalous windows {sum(x > 0 for x in preds)}/{len(preds)}", end="\t")
+        if printClasses:
             print(f"Class Anomalies (predicted/real//total): {sum(x > 0 for x in y_pred)}/{sum(x > 0 for x in y_true)}/{len(y_pred)}")
             pred_classes = dict(Counter(y_pred))
             true_classes = dict(Counter(y_true))
