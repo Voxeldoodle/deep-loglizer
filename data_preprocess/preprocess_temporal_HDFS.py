@@ -17,15 +17,15 @@ parser.add_argument("--train_anomaly_ratio", default=1.0, type=float)
 
 params = vars(parser.parse_args())
 
-time_range = 60
+time_range = 30
 
 data_name = f'hdfs_{params["train_anomaly_ratio"]}_{time_range}s_tar'
 data_dir = "../data/processed/temporal_HDFS"
 
 params = {
-    "log_file": "C:/Users/a.casoli/Desktop/Tesi/Resources/HDFS_result/HDFS_main_structured.csv",
+    "log_file": "C:/Users/Antonio/Desktop/Tesi Magistrale/Codice/Resources/HDFS_result/HDFS_main_structured.csv",
     "time_range": time_range,
-    "label_file":"C:/Users/a.casoli/Desktop/Tesi/Resources/HDFS/anomaly_label.csv",
+    "label_file":"C:/Users/Antonio/Desktop/Tesi Magistrale/Codice/Resources/HDFS/anomaly-label.csv",
     "test_ratio": 0.2,
     "random_sessions": True,  # shuffle sessions
     "train_anomaly_ratio": params["train_anomaly_ratio"],
