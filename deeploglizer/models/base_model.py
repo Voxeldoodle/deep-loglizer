@@ -291,15 +291,6 @@ class ForcastBasedModel(nn.Module):
                 y = (session_df["window_anomalies"] > 0).astype(int)
                 window_topk_acc = 1 - store_df["window_anomalies"].sum() / len(store_df)
 
-                ###############Begin###################
-                # y_pred = list(np.where(store_df[f'window_pred_anomaly_{topk}']==0,store_df['window_labels'],0))
-                # class_results = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
-                ################End####################
-                ###############Begin###################
-                preds = (store_df[f"window_pred_anomaly_{topk}"] > 0).astype(int)
-                class_results = self.evaluate_anomalies(real_classes,preds, False)
-                ################End####################
-
                 eval_results = {
                     "f1": f1_score(y, pred),
                     "rc": recall_score(y, pred),
@@ -308,8 +299,16 @@ class ForcastBasedModel(nn.Module):
                 }
                 logging.info({k: f"{v:.3f}" for k, v in eval_results.items()})
 
-                ##############Begin###################
-                logging.info({k: f"{v:.3f}" for k, v in class_results['macro avg'].items()})
+                ###############Begin###################
+                # y_pred = list(np.where(store_df[f'window_pred_anomaly_{topk}']==0,store_df['window_labels'],0))
+                # class_results = classification_report(y_true, y_pred, output_dict=True, zero_division=0)
+                ################End####################
+                ###############Begin###################
+                if topk == 1 or topk == self.topk:
+                    preds = (store_df[f"window_pred_anomaly_{topk}"] > 0).astype(int)
+                    class_results = self.evaluate_anomalies(real_classes,preds, False)
+
+                    logging.info({k: f"{v:.3f}" for k, v in class_results['macro avg'].items()})
                 ################End#################
 
                 if eval_results["f1"] >= best_f1:
