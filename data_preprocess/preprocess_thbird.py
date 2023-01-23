@@ -1,5 +1,4 @@
 import os
-import re
 import pickle
 import argparse
 import pandas as pd
@@ -7,67 +6,52 @@ import numpy as np
 from utils import decision, json_pretty_dump
 from collections import OrderedDict, defaultdict
 
-
-seed = 42
-np.random.seed(seed)
-
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--train_anomaly_ratio", default=1.0, type=float)
+parser.add_argument("--train_anomaly_ratio", default=0.0, type=float)
 
 params = vars(parser.parse_args())
 
-time_range = 60
+time_range = 3600
 
-data_name = f'hdfs_{params["train_anomaly_ratio"]}_{time_range}s_tar'
-data_dir = "../data/processed/HDFS_parallel"
+eval_name = f'thbird_{params["train_anomaly_ratio"]}_{time_range}s_tar'
+seed = 42
+data_dir = "../data/processed/Thbird_parallel_.7tau"
+np.random.seed(seed)
 
 params = {
-    "log_file": "C:/Users/Antonio/Desktop/Tesi Magistrale/Codice/Resources/HDFS_parallel_main_structured.csv",
-    "time_range": time_range,
-    "label_file":"C:/Users/Antonio/Desktop/Tesi Magistrale/Codice/Resources/HDFS/anomaly-label.csv",
+    "log_file": "C:/Users/Antonio/Desktop/Tesi Magistrale/Codice/Resources/Thbird_parallel_.7tau_main_structured.csv",
+    "time_range": time_range,  # 1 hour
+    "train_ratio": None,
     "test_ratio": 0.2,
-    "random_sessions": True,  # shuffle sessions
+    "random_sessions": True,
     "train_anomaly_ratio": params["train_anomaly_ratio"],
 }
 
-data_dir = os.path.join(data_dir, data_name)
+data_dir = os.path.join(data_dir, eval_name)
 os.makedirs(data_dir, exist_ok=True)
 
 
-def preprocess_hdfs(
+def load_Thbird(
     log_file,
     time_range,
-    label_file,
-    test_ratio=None,
-    train_anomaly_ratio=1,
-    random_sessions=False,
-    **kwargs
+    train_ratio,
+    test_ratio,
+    random_sessions,
+    train_anomaly_ratio,
 ):
-    """Load HDFS structured log into train and test data
-
-    Arguments
-    ---------
-        TODO
-
-    Returns
-    -------
-        TODO
-    """
-    print("Loading HDFS logs from {}.".format(log_file))
+    print("Loading Thunderbird logs from {}.".format(log_file))
     struct_log = pd.read_csv(log_file, engine="c", na_filter=False, memory_map=True)
+    # struct_log.sort_values(by=["Timestamp"], inplace=True)
+
+    struct_log["Label"] = struct_log["Label"].map(lambda x: x != "-").astype(int).values
     struct_log["time"] = pd.to_datetime(
-    struct_log.Date.astype(str).str.zfill(6)+
-    struct_log.Time.astype(str).str.zfill(6),
-    format="%d%m%y%H%M%S")
+    struct_log.Date.astype(str)+'-'+
+    struct_log.Time.astype(str),
+     format="%Y.%m.%d-%H:%M:%S")
     struct_log["seconds_since"] = (
         (struct_log["time"] - struct_log["time"][0]).dt.total_seconds().astype(int)
     )
-
-    # assign labels
-    label_data = pd.read_csv(label_file, engine="c", na_filter=False, memory_map=True)
-    label_data["Label"] = label_data["Label"].map(lambda x: int(x == "Anomaly"))
-    label_data_dict = dict(zip(label_data["BlockId"], label_data["Label"]))
 
     session_dict = OrderedDict()
     column_idx = {col: idx for idx, col in enumerate(struct_log.columns)}
@@ -80,14 +64,13 @@ def preprocess_hdfs(
         if sessid not in session_dict:
             session_dict[sessid] = defaultdict(list)
         session_dict[sessid]["templates"].append(row[column_idx["EventTemplate"]])
+        session_dict[sessid]["label"].append(
+            row[column_idx["Label"]]
+        )  # labeling for each log
 
-        blkId_list = re.findall(r"(blk_-?\d+)", row[column_idx["Content"]])
-        blkId_set = set(blkId_list)
-        session_dict[sessid]["label"].append(0)
-        for blk_Id in blkId_set:
-            if label_data_dict[blk_Id]:
-                session_dict[sessid]["label"][-1] = 1
-                break
+    # labeling for each session
+    # for k, v in session_dict.items():
+    #     session_dict[k]["label"] = [int(1 in v["label"])]
 
     session_idx = list(range(len(session_dict)))
     # split data
@@ -97,7 +80,9 @@ def preprocess_hdfs(
 
     session_ids = np.array(list(session_dict.keys()))
 
-    train_lines = int((1 - test_ratio) * len(session_idx))
+    if train_ratio is None:
+        train_ratio = 1 - test_ratio
+    train_lines = int(train_ratio * len(session_idx))
     test_lines = int(test_ratio * len(session_idx))
 
     session_idx_train = session_idx[0:train_lines]
@@ -114,10 +99,7 @@ def preprocess_hdfs(
         if (sum(session_dict[k]["label"]) == 0)
         or (sum(session_dict[k]["label"]) > 0 and decision(train_anomaly_ratio))
     }
-
     session_test = {k: session_dict[k] for k in session_id_test}
-
-    # breakpoint()
 
     session_labels_train = [
         1 if sum(v["label"]) > 0 else 0 for _, v in session_train.items()
@@ -137,10 +119,9 @@ def preprocess_hdfs(
     with open(os.path.join(data_dir, "session_test.pkl"), "wb") as fw:
         pickle.dump(session_test, fw)
     json_pretty_dump(params, os.path.join(data_dir, "data_desc.json"))
-
     print("Saved to {}".format(data_dir))
     return session_train, session_test
 
 
 if __name__ == "__main__":
-    preprocess_hdfs(**params)
+    load_Thbird(**params)

@@ -41,7 +41,7 @@ class Embedder(nn.Module):
             return self.embedding_layer(x.long())
 
 
-class ForcastBasedModel(nn.Module):
+class ForecastBasedModel(nn.Module):
     def __init__(
         self,
         meta_data,
@@ -58,7 +58,7 @@ class ForcastBasedModel(nn.Module):
         patience=3,
         **kwargs,
     ):
-        super(ForcastBasedModel, self).__init__()
+        super(ForecastBasedModel, self).__init__()
         self.device = set_device(gpu)
         self.topk = topk
         self.meta_data = meta_data
@@ -190,7 +190,7 @@ class ForcastBasedModel(nn.Module):
             store_df = pd.DataFrame(store_dict)
             use_cols = ["session_idx", "window_anomalies", "window_preds"]
             session_df = store_df[use_cols].groupby("session_idx", as_index=False).sum()
-            pred = (session_df[f"window_preds"] > 0).astype(int)
+            pred = (session_df["window_preds"] > 0).astype(int)
             y = (session_df["window_anomalies"] > 0).astype(int)
             ####################Begin######################
             class_results = self.evaluate_anomalies(real_classes,store_df['window_preds'])
@@ -361,7 +361,7 @@ class ForcastBasedModel(nn.Module):
             torch.save(self.state_dict(), self.model_save_file)
 
     def load_model(self, model_save_file=""):
-        logging.info("Loading model from {}".format(self.model_save_file))
+        logging.info("Loading model from {}".format(model_save_file))
         self.load_state_dict(torch.load(model_save_file, map_location=self.device))
 
     def fit(self, train_loader, test_loader=None, epoches=10, learning_rate=1.0e-3):

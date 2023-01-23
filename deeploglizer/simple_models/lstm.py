@@ -2,8 +2,7 @@ import math
 import torch
 from torch import nn
 
-from deeploglizer.models import ForecastBasedModel
-
+from deeploglizer.simple_models import ForecastBasedModel
 
 class Attention(nn.Module):
     def __init__(self, input_size, max_seq_len):
@@ -92,13 +91,7 @@ class LSTM(ForecastBasedModel):
             self.hidden_size * self.num_directions, num_labels
         )
 
-    def forward(self, input_dict):
-        if self.label_type == "anomaly":
-            y = input_dict["window_anomalies"].long().view(-1)
-        elif self.label_type == "next_log":
-            y = input_dict["window_labels"].long().view(-1)
-        self.batch_size = y.size()[0]
-        x = input_dict["features"]
+    def forward(self, x):
         x = self.embedder(x)
 
         if self.feature_type == "semantics":
@@ -115,6 +108,4 @@ class LSTM(ForecastBasedModel):
 
         logits = self.prediction_layer(representation)
         y_pred = logits.softmax(dim=-1)
-        loss = self.criterion(logits, y)
-        return_dict = {"loss": loss, "y_pred": y_pred}
-        return return_dict
+        return y_pred
