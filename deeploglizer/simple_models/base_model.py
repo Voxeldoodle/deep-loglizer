@@ -11,7 +11,12 @@ from sklearn.metrics import accuracy_score, f1_score, recall_score, precision_sc
 from collections import Counter
 
 
-from deeploglizer.common.utils import set_device, tensor2flatten_arr
+def set_device(gpu=-1):
+    if gpu != -1 and torch.cuda.is_available():
+        device = torch.device("cuda:" + str(gpu))
+    else:
+        device = torch.device("cpu")
+    return device
 
 
 class Embedder(nn.Module):

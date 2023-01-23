@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from deeploglizer.simple_models import ForecastBasedModel
+from base_model import ForecastBasedModel
 
 
 class Transformer(ForecastBasedModel):

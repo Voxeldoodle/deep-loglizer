@@ -2,7 +2,7 @@ import math
 import torch
 from torch import nn
 
-from deeploglizer.simple_models import ForecastBasedModel
+from base_model import ForecastBasedModel
 
 class Attention(nn.Module):
     def __init__(self, input_size, max_seq_len):
