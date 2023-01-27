@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from deeploglizer.models import ForecastBasedModel
+from base_model import ForecastBasedModel
 
 
 class AutoEncoder(ForecastBasedModel):
