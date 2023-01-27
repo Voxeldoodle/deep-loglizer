@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from base_model import ForecastBasedModel
+from base_model import ForecastBasedModel, Embedder
 
 
 class AutoEncoder(ForecastBasedModel):
