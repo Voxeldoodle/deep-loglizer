@@ -5,7 +5,6 @@ from pyspark.ml.util import DefaultParamsReadable, DefaultParamsWritable
 from pyspark.sql import DataFrame
 from pyspark.sql.types import StringType
 import pyspark.sql.functions as F
-from pyspark.sql.functions import col, lag, sum, when, min, floor, dense_rank
 from pyspark.sql import Window
 
  
@@ -67,14 +66,14 @@ class TemporalPreprocessor(
         w2 = Window.partitionBy('group1').orderBy(input_col)
         w3 = Window.orderBy('group1', 'group2')
 
-        diff = col(input_col).astype('long') - lag(col(input_col).astype('long')).over(w)
-        diff = when(diff.isNull(), 0).otherwise(diff)
+        diff = F.col(input_col).astype('long') - F.lag(F.col(input_col).astype('long')).over(w)
+        diff = F.when(diff.isNull(), 0).otherwise(diff)
         diff = (diff > interval).astype('int')
 
         df = (df
-              .withColumn('group1', sum(diff).over(w))
-              .withColumn('group2', floor((col(input_col).astype('long') - min(col(input_col).astype('long')).over(w2)) / interval))
-              .withColumn(output_col, dense_rank().over(w3))
+              .withColumn('group1', F.sum(diff).over(w))
+              .withColumn('group2', F.floor((F.col(input_col).astype('long') - F.min(F.col(input_col).astype('long')).over(w2)) / interval))
+              .withColumn(output_col, F.dense_rank().over(w3))
         )
         df = df.drop('group1', 'group2')
 

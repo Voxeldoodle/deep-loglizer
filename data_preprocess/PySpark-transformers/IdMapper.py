@@ -74,7 +74,7 @@ class IdMapper(
                 .orderBy(f"min({idCol})")
 
         for row in tmp.collect():
-          mapping[row["EventTemplate"]] = i
+          mapping[row["EventTemplate"]] = counter
           counter+=1
 
         mapping_func = lambda x: mapping.get(x) 
