@@ -5,7 +5,6 @@ from pyspark.ml.util import DefaultParamsReadable, DefaultParamsWritable
 from pyspark.sql import DataFrame
 from pyspark.sql.types import StringType, IntegerType
 import pyspark.sql.functions as F
-from pyspark.sql.functions import col, lag, sum, when, min, floor, dense_rank, udf
 from pyspark.sql import Window
 
  
@@ -68,12 +67,17 @@ class IdMapper(
           counter = 1
         else:
           counter = max(mapping.values()) + 1
-        for row in df.collect():
-            if row[input_col] not in mapping:
-              mapping[row[input_col]] = counter
-              counter += 1
+
+        idCol = "LineId"
+        tmp = df.withColumn(idCol,F.col(idCol).cast(IntegerType())) \
+                .groupBy(input_col).min(idCol) \
+                .orderBy(f"min({idCol})")
+
+        for row in tmp.collect():
+          mapping[row["EventTemplate"]] = i
+          counter+=1
 
         mapping_func = lambda x: mapping.get(x) 
-        df = df.withColumn(output_col,udf(mapping_func, IntegerType())(input_col))
+        df = df.withColumn(output_col,F.udf(mapping_func, IntegerType())(input_col))
 
         return df
