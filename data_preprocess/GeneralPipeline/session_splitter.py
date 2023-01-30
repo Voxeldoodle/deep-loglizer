@@ -12,14 +12,14 @@ np.random.seed(seed)
 time_range = 60
 train_anomaly_ratio = 0
 
-params = {
-    "log_file": log_path,
-    "time_range": time_range,
-    "label_file":label_path,
-    "test_ratio": 0.2,
-    "random_sessions": True,  # shuffle sessions
-    "train_anomaly_ratio": train_anomaly_ratio,
-}
+# params = {
+#     "log_file": log_path,
+#     "time_range": time_range,
+#     "label_file":label_path,
+#     "test_ratio": 0.2,
+#     "random_sessions": True,  # shuffle sessions
+#     "train_anomaly_ratio": train_anomaly_ratio,
+# }
 
 # data_dir = os.path.join(data_dir, data_name)
 # os.makedirs(data_dir, exist_ok=True)

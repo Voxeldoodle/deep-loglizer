@@ -6,10 +6,19 @@ import time
 
 from session_splitter import *
 from dataset_composer import *
+import argparse
+
+parser = argparse.ArgumentParser()
+
+##### Model params
+parser.add_argument("--log_path", default="", type=str)
+parser.add_argument("--label_path", default=None, type=str)
+
+params = vars(parser.parse_args())
 
 start = time.time()
-hdfs_path = "C:/Users/Antonio/Desktop/Tesi Magistrale/Codice/Resources/HDFS_parallel_main_structured.csv"
-label_path = "C:/Users/Antonio/Desktop/Tesi Magistrale/Codice/Resources/HDFS/anomaly-label.csv"
+hdfs_path = params["log_path"]
+label_path = params["label_path"]
 hdfs_df = pd.read_csv(hdfs_path, engine="c", na_filter=False, memory_map=True)
 
 df = normalize_hdfs(hdfs_df, label_path)
