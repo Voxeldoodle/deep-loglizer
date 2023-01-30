@@ -15,38 +15,24 @@ from utils import json_pretty_dump, dump_pickle, load_pickle
 
 class FeatureExtractor(BaseEstimator):
     """
-    feature_type: "sequentials", "quantitatives"
+    label_type: "none", "next_log", "anomaly"
     window_type: "session", "sliding"
     """
 
     def __init__(
         self,
-        label_type="next_log",  # "none", "next_log", "anomaly"
-        feature_type="sequentials",
+        label_type="next_log",
         window_type="sliding",
         window_size=None,
         stride=None,
-        cache=False,
         **kwargs,
     ):
         self.label_type = label_type
-        self.feature_type = feature_type
         self.window_type = window_type
         self.window_size = window_size
         self.stride = stride
-        self.cache = cache
-        self.meta_data = {}
 
-        if cache:
-            param_json = self.get_params()
-            identifier = hashlib.md5(str(param_json).encode("utf-8")).hexdigest()[0:8]
-            self.cache_dir = os.path.join("./cache", identifier)
-            os.makedirs(self.cache_dir, exist_ok=True)
-            json_pretty_dump(
-                param_json, os.path.join(self.cache_dir, "feature_extractor.json")
-            )
-
-    def __generate_windows(self, session_dict, stride, extra_metric=False):
+    def __generate_windows(self, session_dict, extra_metric=False):
         window_count = 0
         for session_id, data_dict in session_dict.items():
             if self.window_type == "sliding":
@@ -85,7 +71,7 @@ class FeatureExtractor(BaseEstimator):
                     if extra_metric:
                         window_an_classes.append(np.array(classes))
 
-                    i += stride
+                    i += self.stride
                 else:
                     window = templates[i:-1]
                     window.extend(["PADDING"] * (self.window_size - len(window)))
@@ -153,26 +139,7 @@ class FeatureExtractor(BaseEstimator):
             total_features.append(ids)
         return np.array(total_features)
 
-    def save(self):
-        logging.info("Saving feature extractor to {}.".format(self.cache_dir))
-        with open(os.path.join(self.cache_dir, "est.pkl"), "wb") as fw:
-            pickle.dump(self, fw)
-
-    def load(self):
-        try:
-            save_file = os.path.join(self.cache_dir, "est.pkl")
-            logging.info("Loading feature extractor from {}.".format(save_file))
-            with open(save_file, "rb") as fw:
-                obj = pickle.load(fw)
-                self.__dict__ = obj.__dict__
-                return True
-        except Exception as e:
-            logging.info("Cannot load cached feature extractor.")
-            return False
-
     def fit(self, session_dict):
-        if self.load():
-            return
         log_padding = "<pad>"
         log_oov = "<oov>"
 
@@ -190,22 +157,19 @@ class FeatureExtractor(BaseEstimator):
         logging.info("{} templates are found.".format(len(self.log2id_train)))
 
         if self.label_type == "next_log":
-            self.meta_data["num_labels"] = len(self.log2id_train)
+            print("num_labels ", len(self.log2id_train))
         elif self.label_type == "anomaly":
-            self.meta_data["num_labels"] = 2
+            print("num_labels ", 2)
         else:
             logging.info('Unrecognized label type "{}"'.format(self.label_type))
             exit()
 
-        if self.feature_type == "sequentials":
-            self.meta_data["vocab_size"] = len(self.log2id_train)
+        if self.feature_type == "sequentials":+
+            print("vocab_size ", len(self.log2id_train))
 
         else:
             logging.info('Unrecognized feature type "{}"'.format(self.feature_type))
             exit()
-
-        if self.cache:
-            self.save()
 
     def transform(self, session_dict, datatype="train"):
         logging.info("Transforming {} data.".format(datatype))
@@ -213,12 +177,12 @@ class FeatureExtractor(BaseEstimator):
         if datatype == "test":
             # handle new logs
             ulog_new = ulog - self.ulog_train
-            logging.info(f"{len(ulog_new)} new templates show while testing.")
-
-        if self.cache:
-            cached_file = os.path.join(self.cache_dir, datatype + ".pkl")
-            if os.path.isfile(cached_file):
-                return load_pickle(cached_file)
+            logging.info(f"{len(ulog_new)} new templates found while transforming.")
+            self.id2log = self.id2log_train
+            self.id2log.update(
+                {idx: log for idx, log in enumerate(self.ulog_new, len(self.ulog_train))}
+            )
+            self.log2id = {v: k for k, v in self.id2log.items()}
 
         # generate windows, each window contains logid only
         if datatype == "train":
@@ -240,8 +204,6 @@ class FeatureExtractor(BaseEstimator):
             session_dict[session_id]["features"] = feature_dict
 
         logging.info("Finish feature extraction ({}).".format(datatype))
-        if self.cache:
-            dump_pickle(session_dict, cached_file)
         return session_dict
 
     def fit_transform(self, session_dict):
